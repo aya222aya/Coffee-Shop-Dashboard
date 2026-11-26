@@ -1,0 +1,112 @@
+from dash import Dash, html, dcc, dash_table, callback, Output, Input
+import plotly.express as px
+import pandas as pd
+#load data
+df = pd.read_csv("Coffe_sales.csv")
+df["Date"] = pd.to_datetime(df["Date"])
+
+app = Dash()
+
+app.layout = html.Div(children=[
+    #titre de dashboard
+    html.H1(children= "Coffee shop dashboard",
+            style={
+                "textAlign": "center",
+                "color":"#593A2E",
+                "padding": "20px"
+            }),
+    #date dropdown
+    html.Label(children="Select a date"),
+
+    dcc.Dropdown(
+        id="date-dropdown",
+        options=[
+            {"label": date, "value": date}
+            for date in sorted(df["Date"].dt.strftime("%Y-%m-%d").unique())
+
+        ],
+        value = df["Date"].dt.strftime("%Y-%m-%d").min(),
+        clearable=False
+    ),
+    #kpi
+    html.Div(children=[
+
+        html.Div(children=[
+            html.H3(children="Total revenue"),
+            html.H2(id="revenue-kpi")
+        ]),
+        html.Div(children=[
+            html.H3(children="Transaction"),
+            html.H2(id="transaction-kpi")
+        ]),
+        html.Div(children=[
+            html.H3(children="best-selling coffee"),
+            html.H2(id="best-coffee-kpi")
+        ])
+
+], style={
+        "display": "flex",
+        "justifyContent": "space-around",
+        "margin": "30px"
+    }),
+    #graph
+    dcc.Graph(id="sales-graph"),
+
+    #notif
+    html.Div(id="sales-alert")
+])
+@app.callback(
+    Output("revenue-kpi", "children"),
+    Output("transaction-kpi", "children"),
+    Output("best-coffee-kpi", "children"),
+    Output("sales-graph", "figure"),
+    Output("sales-alert", "children"),
+    Input("date-dropdown", "value")
+)
+def update_dashboard(selected_date):
+    filtered_df = df[
+        df["Date"].dt.strftime("%Y-%m-%d") == selected_date
+
+    ]
+    #calculer revenue total
+    total_revenue = filtered_df["money"].sum()
+
+    #compter les transaction
+    total_transactions = len(filtered_df)
+
+    #bestseller
+    best_coffee = filtered_df.groupby("coffee_name")["money"].sum().idxmax()
+
+    #le graph
+    sales_by_coffee = filtered_df.groupby("coffee_name")["money"].sum().reset_index()
+
+    fig = px.bar(
+        sales_by_coffee,
+        x= "coffee_name",
+        y= "money",
+        title="Revenue by coffee type",
+        labels={"coffee_name": "Coffee Type", "money": "Revenue (DH)"}
+    )
+
+    #notif
+    if total_revenue < 300:
+        alert = html.Div(
+            children="Warning: Daily revenue is below target",
+            style={"color" : "brown", "fontWeight": "bold"}
+        )
+    else:
+        alert = html.Div(
+            children="daily revenue target achieved",
+            style={"color": "pink", "fontWeight": "bold"}
+        )
+
+    return (
+        f"{round(total_revenue, 2)} DH",
+        total_transactions,
+        best_coffee,
+        fig,
+        alert
+    )
+
+if __name__ == "__main__":
+    app.run(debug=True)
